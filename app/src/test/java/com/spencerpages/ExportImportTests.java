@@ -97,8 +97,7 @@ public class ExportImportTests extends BaseTestCase {
     @Test
     public void test_legacyCsvExportOneOfEachCollection() {
         try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(
-                new Intent(ApplicationProvider.getApplicationContext(), MainActivity.class)
-                        .putExtra(MainActivity.UNIT_TEST_USE_ASYNC_TASKS, false))) {
+                new Intent(ApplicationProvider.getApplicationContext(), MainActivity.class))) {
             scenario.onActivity(activity -> {
                 // Set up collections
                 //assertTrue(waitForMainActivitySetup(activity));
@@ -153,8 +152,7 @@ public class ExportImportTests extends BaseTestCase {
     @Test
     public void test_jsonExportOneOfEachCollection() {
         try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(
-                new Intent(ApplicationProvider.getApplicationContext(), MainActivity.class)
-                        .putExtra(MainActivity.UNIT_TEST_USE_ASYNC_TASKS, false))) {
+                new Intent(ApplicationProvider.getApplicationContext(), MainActivity.class))) {
             scenario.onActivity(activity -> {
                 // Set up collections
                 //assertTrue(waitForMainActivitySetup(activity));
@@ -199,8 +197,7 @@ public class ExportImportTests extends BaseTestCase {
     @Test
     public void test_csvExportOneOfEachCollection() {
         try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(
-                new Intent(ApplicationProvider.getApplicationContext(), MainActivity.class)
-                        .putExtra(MainActivity.UNIT_TEST_USE_ASYNC_TASKS, false))) {
+                new Intent(ApplicationProvider.getApplicationContext(), MainActivity.class))) {
             scenario.onActivity(activity -> {
                 // Set up collections
                 //assertTrue(waitForMainActivitySetup(activity));
@@ -245,8 +242,7 @@ public class ExportImportTests extends BaseTestCase {
     @Test
     public void test_csvImportV1Collection() {
         try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(
-                new Intent(ApplicationProvider.getApplicationContext(), MainActivity.class)
-                        .putExtra(MainActivity.UNIT_TEST_USE_ASYNC_TASKS, false))) {
+                new Intent(ApplicationProvider.getApplicationContext(), MainActivity.class))) {
             scenario.onActivity(activity -> {
                 File v1DbDir = new File("src/test/data/v1-coin-collection-files");
                 assertTrue(setEnabledPermissions(activity));
@@ -283,8 +279,7 @@ public class ExportImportTests extends BaseTestCase {
                 "collection.csv"
         ));
         try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(
-                new Intent(ApplicationProvider.getApplicationContext(), MainActivity.class)
-                        .putExtra(MainActivity.UNIT_TEST_USE_ASYNC_TASKS, false))) {
+                new Intent(ApplicationProvider.getApplicationContext(), MainActivity.class))) {
             scenario.onActivity(activity -> {
                 // Set up collections
                 assertTrue(setEnabledPermissions(activity));
@@ -385,8 +380,7 @@ public class ExportImportTests extends BaseTestCase {
                 {"src/test/data/coin-collection-010822-17-excel.csv", 11},
         };
         try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(
-                new Intent(ApplicationProvider.getApplicationContext(), MainActivity.class)
-                        .putExtra(MainActivity.UNIT_TEST_USE_ASYNC_TASKS, false))) {
+                new Intent(ApplicationProvider.getApplicationContext(), MainActivity.class))) {
             scenario.onActivity(activity -> {
                 for (Object[] testFile : testFiles) {
                     ExportImportHelper helper = new ExportImportHelper(activity.mRes, activity.mDbAdapter);

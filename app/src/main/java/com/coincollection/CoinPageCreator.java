@@ -24,7 +24,6 @@ import static com.coincollection.CollectionPage.SIMPLE_DISPLAY;
 import static com.spencerpages.MainApplication.APP_NAME;
 
 import android.content.Context;
-import android.database.SQLException;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.InputFilter;
@@ -44,14 +43,12 @@ import android.widget.LinearLayout;
 import android.widget.Spinner;
 import android.widget.Toast;
 
+import androidx.lifecycle.ViewModelProvider;
+
 import com.coincollection.helper.ParcelableHashMap;
 import com.spencerpages.BuildConfig;
 import com.spencerpages.MainApplication;
 import com.spencerpages.R;
-
-import androidx.lifecycle.ViewModelProvider; // Added for ViewModel
-// Application import might be needed if getApplication() is not directly available,
-// but usually it is in an Activity.
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -664,10 +661,6 @@ public class CoinPageCreator extends BaseActivity implements MainViewModel.TaskP
                     Toast.LENGTH_SHORT).show();
             return;
         }
-
-        // Passed all checks - start the creation/update and wait for callbacks to be called
-        EditText nameEditText = findViewById(R.id.edit_enter_collection_name);
-        String collectionName = nameEditText.getText().toString(); // This is correct as is.
 
         createOrUpdateCoinListForAsyncThread(); // This populates this.mCoinList
         CollectionListInfo collectionListInfo = getCollectionInfoFromParameters(collectionName);

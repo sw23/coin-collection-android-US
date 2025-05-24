@@ -329,8 +329,7 @@ public class BaseTestCase {
     public void validateUpdatedDb(final CollectionInfo collectionInfo, final String collectionName,
                                   final ParcelableHashMap parameters) {
         try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(
-                new Intent(ApplicationProvider.getApplicationContext(), MainActivity.class)
-                        .putExtra(MainActivity.UNIT_TEST_USE_ASYNC_TASKS, false))) {
+                new Intent(ApplicationProvider.getApplicationContext(), MainActivity.class))) {
             scenario.onActivity(activity -> {
 
                 // Create a new database from scratch
