@@ -49,15 +49,20 @@ import com.spencerpages.BuildConfig;
 import com.spencerpages.MainApplication;
 import com.spencerpages.R;
 
+import androidx.lifecycle.ViewModelProvider; // Added for ViewModel
+// Application import might be needed if getApplication() is not directly available,
+// but usually it is in an Activity.
+
 import java.util.ArrayList;
 import java.util.HashMap;
 
 /**
  * Activity responsible for managing the collection creation page
  */
-public class CoinPageCreator extends BaseActivity {
+public class CoinPageCreator extends BaseActivity implements MainViewModel.TaskProgressCallback {
 
     public final static String EXISTING_COLLECTION_EXTRA = "existing-collection";
+    private CoinPageCreatorViewModel coinPageCreatorViewModel;
 
     /**
      * mCoinTypeIndex The index of the currently selected coin type in the
@@ -268,6 +273,9 @@ public class CoinPageCreator extends BaseActivity {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        // Initialize ViewModel
+        coinPageCreatorViewModel = new ViewModelProvider(this).get(CoinPageCreatorViewModel.class);
+
         // Set the actionbar so that clicking the icon takes you back (SO 1010877)
         if (mActionBar != null) {
             mActionBar.setDisplayHomeAsUpEnabled(true);
@@ -298,14 +306,6 @@ public class CoinPageCreator extends BaseActivity {
             // New collection - Setup default options
             setInternalStateFromCollectionIndex(0, -1, null);
         }
-
-        // Restore the progress dialog if the previous task was running
-        if (mPreviousTask != null) {
-            asyncProgressOnPreExecute();
-        }
-
-        // At this point the UI is ready to handle any async callbacks
-        setActivityReadyForAsyncCallbacks();
 
         // Next, we will finish setting up the various UI elements (creating
         // adapters, listeners, etc..  We won't set any of the values yet -
@@ -664,38 +664,46 @@ public class CoinPageCreator extends BaseActivity {
         }
 
         // Passed all checks - start the creation/update and wait for callbacks to be called
-        kickOffAsyncProgressTask(TASK_CREATE_UPDATE_COLLECTION);
-    }
-
-    @Override
-    public String asyncProgressDoInBackground() {
-
-        // Go ahead and grab what is in the EditText
         EditText nameEditText = findViewById(R.id.edit_enter_collection_name);
         String collectionName = nameEditText.getText().toString();
 
-        // Get the new display order for new collections (display order is preserved
-        // for existing collections)
-        int newDisplayOrder = (mExistingCollection == null) ?
-                mDbAdapter.getNextDisplayOrder() : 0;
-
-        // Create the coin list or update the existing list
-        createOrUpdateCoinListForAsyncThread();
-
-        // Create or modify the database
+        createOrUpdateCoinListForAsyncThread(); // This populates this.mCoinList
         CollectionListInfo collectionListInfo = getCollectionInfoFromParameters(collectionName);
-        return asyncCreateOrUpdateCollection(collectionListInfo, mCoinList, newDisplayOrder);
+        int displayOrder = (mExistingCollection == null) ? mDbAdapter.getNextDisplayOrder() : 0;
+        boolean isExisting = (mExistingCollection != null);
+
+        if (mDbAdapter == null || !mDbAdapter.isOpen()) {
+            showCancelableAlert(mRes.getString(R.string.error_database_not_open));
+            return;
+        }
+
+        coinPageCreatorViewModel.saveCollection(
+            getApplication(),
+            mDbAdapter,
+            collectionListInfo,
+            this.mCoinList, // Use the member variable populated by createOrUpdateCoinListForAsyncThread()
+            displayOrder,
+            isExisting,
+            mExistingCollection, // Pass the existing collection info
+            this // 'this' is the TaskProgressCallback
+        );
     }
 
     @Override
-    public void asyncProgressOnPreExecute() {
-        createProgressDialog(mRes.getString(R.string.creating_collection));
+    public void onTaskStarted(String progressMessage) {
+        createProgressDialog(progressMessage);
     }
 
     @Override
-    public void asyncProgressOnPostExecute(String resultStr) {
-        super.asyncProgressOnPostExecute(resultStr);
-        completeProgressDialogAndFinishActivity();
+    public void onTaskCompleted(String resultMessage, boolean requiresUiRefresh) {
+        // requiresUiRefresh is false from CoinPageCreatorViewModel, so not used here.
+        dismissProgressDialog(); // Changed from completeProgressDialogAndFinishActivity to just dismiss
+        if (!resultMessage.isEmpty()) {
+            showCancelableAlert(resultMessage); // Show error if any
+            // Don't finish if there was an error, so user can correct.
+        } else {
+            finish(); // Finish activity on successful save
+        }
     }
 
     /**
@@ -1413,20 +1421,9 @@ public class CoinPageCreator extends BaseActivity {
      * @param displayOrder       Display order of the collection
      * @return "" if successful, otherwise an error string
      */
-    public String asyncCreateOrUpdateCollection(CollectionListInfo collectionListInfo, ArrayList<CoinSlot> coinList,
-                                                int displayOrder) {
-        try {
-            if (mExistingCollection == null) {
-                mDbAdapter.createAndPopulateNewTable(collectionListInfo, displayOrder, coinList);
-            } else {
-                String oldTableName = mExistingCollection.getName();
-                mDbAdapter.updateExistingCollection(oldTableName, collectionListInfo, coinList);
-            }
-        } catch (SQLException e) {
-            return mRes.getString(R.string.error_creating_database);
-        }
-        return "";
-    }
+    // This method is removed as its logic is now in CoinPageCreatorViewModel.saveCollection
+    // public String asyncCreateOrUpdateCollection(CollectionListInfo collectionListInfo, ArrayList<CoinSlot> coinList,
+    //                                             int displayOrder) { ... }
 
     /**
      * Setup lists used for collection list
