@@ -306,6 +306,8 @@ public class CoinPageCreator extends BaseActivity implements MainViewModel.TaskP
             // New collection - Setup default options
             setInternalStateFromCollectionIndex(0, -1, null);
         }
+        // Obsolete mPreviousTask and setActivityReadyForAsyncCallbacks logic is already removed
+        // from BaseActivity and thus not called here.
 
         // Next, we will finish setting up the various UI elements (creating
         // adapters, listeners, etc..  We won't set any of the values yet -
@@ -665,15 +667,17 @@ public class CoinPageCreator extends BaseActivity implements MainViewModel.TaskP
 
         // Passed all checks - start the creation/update and wait for callbacks to be called
         EditText nameEditText = findViewById(R.id.edit_enter_collection_name);
-        String collectionName = nameEditText.getText().toString();
+        String collectionName = nameEditText.getText().toString(); // This is correct as is.
 
         createOrUpdateCoinListForAsyncThread(); // This populates this.mCoinList
         CollectionListInfo collectionListInfo = getCollectionInfoFromParameters(collectionName);
-        int displayOrder = (mExistingCollection == null) ? mDbAdapter.getNextDisplayOrder() : 0;
+        // Corrected displayOrder initialization
+        int displayOrder = (mExistingCollection == null && mDbAdapter != null) ? mDbAdapter.getNextDisplayOrder() : 0;
         boolean isExisting = (mExistingCollection != null);
 
-        if (mDbAdapter == null || !mDbAdapter.isOpen()) {
-            showCancelableAlert(mRes.getString(R.string.error_database_not_open));
+        // Corrected database check and ViewModel call
+        if (mDbAdapter == null) {
+            showCancelableAlert(mRes.getString(R.string.error_opening_database));
             return;
         }
 
@@ -696,13 +700,13 @@ public class CoinPageCreator extends BaseActivity implements MainViewModel.TaskP
 
     @Override
     public void onTaskCompleted(String resultMessage, boolean requiresUiRefresh) {
-        // requiresUiRefresh is false from CoinPageCreatorViewModel, so not used here.
-        dismissProgressDialog(); // Changed from completeProgressDialogAndFinishActivity to just dismiss
-        if (!resultMessage.isEmpty()) {
+        // requiresUiRefresh is false from CoinPageCreatorViewModel's saveCollection, so not used here.
+        dismissProgressDialog();
+        if (resultMessage != null && !resultMessage.isEmpty()) { // Check for null as well
             showCancelableAlert(resultMessage); // Show error if any
             // Don't finish if there was an error, so user can correct.
         } else {
-            finish(); // Finish activity on successful save
+            finish(); // Finish activity on successful save (empty or null resultMessage implies success)
         }
     }
 
@@ -1421,9 +1425,9 @@ public class CoinPageCreator extends BaseActivity implements MainViewModel.TaskP
      * @param displayOrder       Display order of the collection
      * @return "" if successful, otherwise an error string
      */
-    // This method is removed as its logic is now in CoinPageCreatorViewModel.saveCollection
-    // public String asyncCreateOrUpdateCollection(CollectionListInfo collectionListInfo, ArrayList<CoinSlot> coinList,
-    //                                             int displayOrder) { ... }
+    // The method asyncCreateOrUpdateCollection was already removed.
+    // The methods asyncProgressDoInBackground, asyncProgressOnPreExecute, and asyncProgressOnPostExecute
+    // were also already removed as they are not part of BaseActivity anymore.
 
     /**
      * Setup lists used for collection list
