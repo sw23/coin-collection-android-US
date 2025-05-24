@@ -315,30 +315,37 @@ public class DatabaseHelper extends SQLiteOpenHelper {
      * @param fromImport if true, indicates that the upgrade is part of a collection import
      */
     public static void upgradeDb(SQLiteDatabase db, int oldVersion, int newVersion, boolean fromImport) {
-
-        if (BuildConfig.DEBUG) {
-            Log.i(APP_NAME, "Upgrading database from version " + oldVersion + " to " + newVersion);
-        }
-
-        // First call the MainApplication's onDatabaseUpgrade to ensure that any changes necessary
-        // for the app to work are done.
-        upgradeDbStructure(db, oldVersion, newVersion, fromImport);
-
-        // Now get a list of the collections and call each one's onCollectionDatabaseUpgrade method
-        ArrayList<CollectionListInfo> collectionList = new ArrayList<>();
-        getAllTables(db, collectionList, false);
-        for (CollectionListInfo collectionListInfo : collectionList) {
-            String tableName = collectionListInfo.getName();
-            int numCoinsAdded = collectionListInfo.getCollectionObj().onCollectionDatabaseUpgrade(
-                    db, collectionListInfo, oldVersion, newVersion);
-            // Update the collection total if coins were added or removed
-            if (numCoinsAdded != 0) {
-                int newTotal = collectionListInfo.getMax() + numCoinsAdded;
-                collectionListInfo.setMax(newTotal);
-                ContentValues values = new ContentValues();
-                values.put(COL_TOTAL, newTotal);
-                runSqlUpdate(db, TBL_COLLECTION_INFO, values, COL_NAME + "=?", new String[]{tableName});
+        db.beginTransaction();
+        try {
+            if (BuildConfig.DEBUG) {
+                Log.i(APP_NAME, "Upgrading database from version " + oldVersion + " to " + newVersion);
             }
+
+            // First call the MainApplication's onDatabaseUpgrade to ensure that any changes necessary
+            // for the app to work are done.
+            upgradeDbStructure(db, oldVersion, newVersion, fromImport);
+
+            // Now get a list of the collections and call each one's onCollectionDatabaseUpgrade method
+            ArrayList<CollectionListInfo> collectionList = new ArrayList<>();
+            getAllTables(db, collectionList, false);
+            for (CollectionListInfo collectionListInfo : collectionList) {
+                String tableName = collectionListInfo.getName();
+                int numCoinsAdded = collectionListInfo.getCollectionObj().onCollectionDatabaseUpgrade(
+                        db, collectionListInfo, oldVersion, newVersion);
+                // Update the collection total if coins were added or removed
+                if (numCoinsAdded != 0) {
+                    int newTotal = collectionListInfo.getMax() + numCoinsAdded;
+                    collectionListInfo.setMax(newTotal);
+                    ContentValues values = new ContentValues();
+                    values.put(COL_TOTAL, newTotal);
+                    runSqlUpdate(db, TBL_COLLECTION_INFO, values, COL_NAME + "=?", new String[]{tableName});
+                }
+            }
+            db.setTransactionSuccessful();
+        } catch (Exception e) {
+            Log.e(APP_NAME, "Error during database upgrade, rolling back changes", e);
+        } finally {
+            db.endTransaction();
         }
     }
 
