@@ -99,8 +99,8 @@ public class MainViewModel extends BaseViewModel {
 
     public void importCollections(Application application, Uri fileUri, boolean isLegacyCsv, String legacyFolderName, TaskProgressCallback callback) {
         // Ensure mDbAdapter is available from openDatabase or passed differently
-        if (mDbAdapter == null || !mDbAdapter.isOpen()) {
-            callback.onTaskCompleted(application.getResources().getString(R.string.error_database_not_open), false);
+        if (mDbAdapter == null) {
+            callback.onTaskCompleted(application.getResources().getString(R.string.error_opening_database), false);
             return;
         }
 
@@ -132,7 +132,7 @@ public class MainViewModel extends BaseViewModel {
                     resultMessage = application.getResources().getString(R.string.error_importing, e.getMessage());
                 } catch (SecurityException e) {
                     Log.e(APP_NAME, "Security error importing collections", e);
-                    resultMessage = application.getResources().getString(R.string.error_importing_permission, e.getMessage());
+                    resultMessage = application.getResources().getString(R.string.error_importing, "Permission denied: " + e.getMessage());
                 }
             }
 
@@ -142,8 +142,8 @@ public class MainViewModel extends BaseViewModel {
     }
 
     public void exportCollections(Application application, Uri fileUri, boolean isLegacyCsv, String legacyFolderName, boolean isSingleFileCsv, String outputFileName, TaskProgressCallback callback) {
-        if (mDbAdapter == null || !mDbAdapter.isOpen()) {
-            callback.onTaskCompleted(application.getResources().getString(R.string.error_database_not_open), false);
+        if (mDbAdapter == null) {
+            callback.onTaskCompleted(application.getResources().getString(R.string.error_opening_database), false);
             return;
         }
 
@@ -167,7 +167,7 @@ public class MainViewModel extends BaseViewModel {
                     resultMessage = application.getResources().getString(R.string.error_exporting, e.getMessage());
                 } catch (SecurityException e) {
                     Log.e(APP_NAME, "Security error exporting collections", e);
-                    resultMessage = application.getResources().getString(R.string.error_exporting_permission, e.getMessage());
+                    resultMessage = application.getResources().getString(R.string.error_exporting, "Permission denied: " + e.getMessage());
                 }
             }
 

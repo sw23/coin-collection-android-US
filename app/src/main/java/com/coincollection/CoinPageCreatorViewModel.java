@@ -32,8 +32,8 @@ public class CoinPageCreatorViewModel extends BaseViewModel {
             CollectionListInfo existingCollectionInfo, // Used for update
             MainViewModel.TaskProgressCallback callback) {
 
-        if (dbAdapter == null || !dbAdapter.isOpen()) {
-            callback.onTaskCompleted(application.getResources().getString(R.string.error_database_not_open), false);
+        if (dbAdapter == null) {
+            callback.onTaskCompleted(application.getResources().getString(R.string.error_opening_database), false);
             return;
         }
 
