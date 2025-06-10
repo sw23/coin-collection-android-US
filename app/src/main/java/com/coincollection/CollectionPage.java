@@ -82,6 +82,15 @@ public class CollectionPage extends BaseActivity {
 
     private int mDisplayType = SIMPLE_DISPLAY;
 
+    // Coin filter states
+    public static final int FILTER_SHOW_ALL = 0;
+    public static final int FILTER_SHOW_COLLECTED = 1;
+    public static final int FILTER_SHOW_MISSING = 2;
+
+    public int mCoinFilter = FILTER_SHOW_ALL;
+    public ArrayList<CoinSlot> mOriginalCoinList;
+    private ArrayList<CoinSlot> mFilteredCoinList;
+
     // Action menu items
     private final static int NUM_ACTIONS = 4;
     private final static int ACTIONS_TOGGLE = 0;
@@ -104,6 +113,7 @@ public class CollectionPage extends BaseActivity {
     private int mViewPosition = 0;
 
     public static final String IS_LOCKED = "_isLocked";
+    public static final String COIN_FILTER = "_coinFilter";
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -201,7 +211,19 @@ public class CollectionPage extends BaseActivity {
                 }
             }
         }
+
+        // Initialize coin filter state
+        SharedPreferences filterPreferences = getSharedPreferences(MainApplication.PREFS, MODE_PRIVATE);
+        mCoinFilter = filterPreferences.getInt(mCollectionName + COIN_FILTER, FILTER_SHOW_ALL);
+        
+        // Create adapter with original coin list - it will handle filtering internally
         mCoinSlotAdapter = new CoinSlotAdapter(this, mCollectionName, collectionTypeObj, mCoinList, mDisplayType);
+        mCoinSlotAdapter.setFilter(mCoinFilter);
+        
+        // Update mCoinList to reference the adapter's filtered list for compatibility
+        // Store original list reference for tests and other compatibility
+        mOriginalCoinList = mCoinSlotAdapter.getOriginalCoinList();
+        mCoinList = mCoinSlotAdapter.getFilteredCoinList();
 
         OnScrollListener scrollListener = new OnScrollListener() {
             public void onScroll(AbsListView view, int firstVisibleItem, int visibleItemCount, int totalItemCount) {
@@ -325,6 +347,20 @@ public class CollectionPage extends BaseActivity {
         } else {
             changeViewItem.setTitle(R.string.advanced_view_string);
             //saveItem.setVisible(false);
+        }
+
+        // Update the filter button text based on current filter state
+        MenuItem filterItem = menu.findItem(R.id.toggle_coin_filter);
+        switch ((mCoinFilter + 1) % 3) {
+            case FILTER_SHOW_ALL:
+                filterItem.setTitle(R.string.show_all_coins);
+                break;
+            case FILTER_SHOW_COLLECTED:
+                filterItem.setTitle(R.string.show_collected_coins);
+                break;
+            case FILTER_SHOW_MISSING:
+                filterItem.setTitle(R.string.show_missing_coins);
+                break;
         }
 
         return true;
@@ -492,6 +528,10 @@ public class CollectionPage extends BaseActivity {
                 this.onBackPressed();
             }
             return true;
+        } else if (itemId == R.id.toggle_coin_filter) {
+            // Toggle the coin filter state
+            toggleCoinFilter();
+            return true;
         } else if (itemId == R.id.add_coin_button) {
             // Show add coin prompt
             showCoinCreateOrRenamePrompt(0, true);
@@ -535,6 +575,12 @@ public class CollectionPage extends BaseActivity {
         boolean isLocked = mainPreferences.getBoolean(oldCollectionName + IS_LOCKED, false);
         editor.remove(oldCollectionName + IS_LOCKED);
         editor.putBoolean(newCollectionName + IS_LOCKED, isLocked);
+        
+        // Transfer coin filter preference
+        int coinFilter = mainPreferences.getInt(oldCollectionName + COIN_FILTER, FILTER_SHOW_ALL);
+        editor.remove(oldCollectionName + COIN_FILTER);
+        editor.putInt(newCollectionName + COIN_FILTER, coinFilter);
+        
         editor.apply();
 
         // Update current view
@@ -586,14 +632,15 @@ public class CollectionPage extends BaseActivity {
         CoinSlot newCoinSlot = new CoinSlot(newName, coinMint, sortOrder, imageId);
         try {
             // Insert the new coin into the database
-            mDbAdapter.addCoinSlotToCollection(newCoinSlot, mCollectionName, true, mCoinList.size() + 1);
+            mDbAdapter.addCoinSlotToCollection(newCoinSlot, mCollectionName, true, mCoinSlotAdapter.getOriginalCoinList().size() + 1);
         } catch (SQLException e) {
             showCancelableAlert(mRes.getString(R.string.error_editing_coin));
             return;
         }
         // Insert the new coin and update the view
-        mCoinList.add(newCoinSlot);
-        mCoinSlotAdapter.notifyDataSetChanged();
+        mCoinSlotAdapter.getOriginalCoinList().add(newCoinSlot);
+        mCoinSlotAdapter.setFilter(mCoinFilter); // Refresh filter to update filtered list
+        mCoinList = mCoinSlotAdapter.getFilteredCoinList(); // Update reference
         scrollToIndex(mCoinList.size() - 1, 0, true);
     }
 
@@ -763,6 +810,19 @@ public class CollectionPage extends BaseActivity {
             // Collection is locked
             showLockedMessage();
         } else {
+            // Save current scroll position before making changes
+            Integer[] savedScrollPosition = null;
+            if (mDisplayType == SIMPLE_DISPLAY) {
+                GridView gridview = findViewById(R.id.standard_collection_page);
+                savedScrollPosition = getAbsListViewPosition(gridview);
+            } else {
+                ListView listview = findViewById(R.id.advanced_collection_page);
+                savedScrollPosition = getAbsListViewPosition(listview);
+            }
+            
+            // Find the current position of the coin being toggled for smarter scroll restoration
+            int coinPositionInCurrentList = mCoinSlotAdapter.getPositionInFilteredList(coinSlot);
+            
             // Preference doesn't exist or Collection is unlocked
             try {
                 mDbAdapter.toggleInCollection(mCollectionName, coinSlot);
@@ -770,12 +830,18 @@ public class CollectionPage extends BaseActivity {
                 showCancelableAlert(mRes.getString(R.string.error_updating_database));
             }
 
-            // Update the mCoinSlotAdapters copy of the coins in this collection
+            // Update the coin's collection status
             boolean oldValue = coinSlot.isInCollection();
             coinSlot.setInCollection(!oldValue);
-
-            // And have the adapter redraw with this new info
-            mCoinSlotAdapter.notifyDataSetChanged();
+            
+            // Since the adapter holds the original list, the change is automatically reflected
+            // Just reapply the current filter to update the filtered view
+            mCoinSlotAdapter.setFilter(mCoinFilter);
+            // Update mCoinList reference for compatibility with existing code
+            mCoinList = mCoinSlotAdapter.getFilteredCoinList();
+            
+            // Restore scroll position intelligently
+            restoreScrollPositionAfterFilterChange(savedScrollPosition, coinSlot, coinPositionInCurrentList);
         }
     }
 
@@ -799,22 +865,23 @@ public class CollectionPage extends BaseActivity {
             try {
                 // Update the sort order in the database and coin list
                 mDbAdapter.updateCoinSortOrderForInsert(mCollectionName, newCoinSlot.getSortOrder());
-                for (CoinSlot currCoinSlot : mCoinList) {
+                for (CoinSlot currCoinSlot : mCoinSlotAdapter.getOriginalCoinList()) {
                     if (currCoinSlot.getSortOrder() >= newCoinSlot.getSortOrder()) {
                         currCoinSlot.setSortOrder(currCoinSlot.getSortOrder() + 1);
                     }
                 }
 
                 // Insert the new coin into the database
-                mDbAdapter.addCoinSlotToCollection(newCoinSlot, mCollectionName, true, mCoinList.size() + 1);
+                mDbAdapter.addCoinSlotToCollection(newCoinSlot, mCollectionName, true, mCoinSlotAdapter.getOriginalCoinList().size() + 1);
             } catch (SQLException e) {
                 showCancelableAlert(mRes.getString(R.string.error_copying_coin));
                 return;
             }
 
             // Insert the new coin and update the view
-            mCoinList.add(coinListInsertIndex, newCoinSlot);
-            mCoinSlotAdapter.notifyDataSetChanged();
+            mCoinSlotAdapter.getOriginalCoinList().add(coinListInsertIndex, newCoinSlot);
+            mCoinSlotAdapter.setFilter(mCoinFilter); // Refresh filter to update filtered list
+            mCoinList = mCoinSlotAdapter.getFilteredCoinList(); // Update reference
         }
     }
 
@@ -833,12 +900,18 @@ public class CollectionPage extends BaseActivity {
         } else {
             // Delete the coin from the coin list
             CoinSlot coinSlot = mCoinList.remove(position);
+            // Also remove from the original list
+            mCoinSlotAdapter.getOriginalCoinList().remove(coinSlot);
             try {
-                mDbAdapter.removeCoinSlotFromCollection(coinSlot, mCollectionName, mCoinList.size());
+                mDbAdapter.removeCoinSlotFromCollection(coinSlot, mCollectionName, mCoinSlotAdapter.getOriginalCoinList().size());
             } catch (SQLException e) {
                 showCancelableAlert(mRes.getString(R.string.error_delete_coin));
                 return;
             }
+            
+            // Refresh the filter to update the filtered list
+            mCoinSlotAdapter.setFilter(mCoinFilter);
+            mCoinList = mCoinSlotAdapter.getFilteredCoinList(); // Update reference
 
             // Update the view
             mCoinSlotAdapter.notifyDataSetChanged();
@@ -1045,5 +1118,165 @@ public class CollectionPage extends BaseActivity {
                 listview.setSelectionFromTop(index, position);
             }
         }
+    }
+
+    /**
+     * Apply the current coin filter to create a filtered list for display
+     */
+    public void applyCurrentFilter() {
+        if (mCoinSlotAdapter != null) {
+            mCoinSlotAdapter.setFilter(mCoinFilter);
+            // Update mCoinList reference for compatibility with existing code
+            mCoinList = mCoinSlotAdapter.getFilteredCoinList();
+        }
+    }
+
+    /**
+     * Intelligently restore scroll position after a filter change or coin toggle
+     * @param savedScrollPosition The original scroll position [index, top]
+     * @param toggledCoin The coin that was toggled (null if this was just a filter change)
+     * @param originalCoinPosition The position of the toggled coin in the previous list
+     */
+    private void restoreScrollPositionAfterFilterChange(Integer[] savedScrollPosition, CoinSlot toggledCoin, int originalCoinPosition) {
+        if (savedScrollPosition == null || mCoinSlotAdapter == null || mCoinSlotAdapter.getCount() == 0) {
+            return;
+        }
+        
+        ArrayList<CoinSlot> filteredList = mCoinSlotAdapter.getFilteredCoinList();
+        
+        int targetIndex = 0;
+        int targetTop = 0;
+        
+        // If a coin was toggled, try to find its new position or stay near where it was
+        if (toggledCoin != null) {
+            int newCoinPosition = mCoinSlotAdapter.getPositionInFilteredList(toggledCoin);
+            if (newCoinPosition != -1) {
+                // The coin is still visible, scroll to show it
+                targetIndex = newCoinPosition;
+                targetTop = savedScrollPosition[1]; // Try to maintain same top offset
+            } else {
+                // The coin is no longer visible due to filtering
+                // Try to maintain relative position based on list size changes
+                if (originalCoinPosition != -1 && savedScrollPosition[0] < filteredList.size()) {
+                    // Use the original scroll position if it's still valid
+                    targetIndex = Math.min(savedScrollPosition[0], filteredList.size() - 1);
+                    targetTop = savedScrollPosition[1];
+                } else {
+                    // Calculate proportional position in the new list
+                    ArrayList<CoinSlot> originalList = mCoinSlotAdapter.getOriginalCoinList();
+                    int originalListSize = originalList.size();
+                    if (originalListSize > 0) {
+                        double relativePosition = (double) savedScrollPosition[0] / originalListSize;
+                        targetIndex = Math.min((int) (relativePosition * filteredList.size()), filteredList.size() - 1);
+                        targetTop = savedScrollPosition[1];
+                    }
+                }
+            }
+        } else {
+            // No specific coin was toggled, try to maintain the original position
+            targetIndex = Math.min(savedScrollPosition[0], mCoinList.size() - 1);
+            targetTop = savedScrollPosition[1];
+        }
+        
+        // Apply the scroll position
+        scrollToIndex(targetIndex, targetTop, false);
+    }
+
+    /**
+     * Toggle the coin filter to the next state and update the display
+     */
+    private void toggleCoinFilter() {
+        // Store the previous filter state for potential cancellation
+        int previousFilter = mCoinFilter;
+        
+        // Save current scroll position before making changes
+        Integer[] savedScrollPosition = null;
+        if (mDisplayType == SIMPLE_DISPLAY) {
+            GridView gridview = findViewById(R.id.standard_collection_page);
+            savedScrollPosition = getAbsListViewPosition(gridview);
+        } else {
+            ListView listview = findViewById(R.id.advanced_collection_page);
+            savedScrollPosition = getAbsListViewPosition(listview);
+        }
+        
+        // Cycle through the filter states
+        mCoinFilter = (mCoinFilter + 1) % 3;
+        
+        // Save the new filter state
+        SharedPreferences filterPreferences = getSharedPreferences(MainApplication.PREFS, MODE_PRIVATE);
+        SharedPreferences.Editor editor = filterPreferences.edit();
+        editor.putInt(mCollectionName + COIN_FILTER, mCoinFilter);
+        editor.apply();
+        
+        // Apply the filter to the adapter
+        if (mCoinSlotAdapter != null) {
+            mCoinSlotAdapter.setFilter(mCoinFilter);
+            // Update mCoinList reference for compatibility with existing code
+            mCoinList = mCoinSlotAdapter.getFilteredCoinList();
+        }
+        
+        // Restore scroll position after filter change
+        restoreScrollPositionAfterFilterChange(savedScrollPosition, null, -1);
+        
+        // Show dialog with current filter state and option to cancel
+        showFilterStateDialog(previousFilter, savedScrollPosition);
+        
+        // Update the menu to show the new filter state
+        invalidateOptionsMenu();
+    }
+
+    /**
+     * Show dialog indicating the current filter state with option to cancel
+     * @param previousFilter The previous filter state to revert to if cancelled
+     * @param savedScrollPosition The scroll position to restore if cancelled
+     */
+    private void showFilterStateDialog(int previousFilter, Integer[] savedScrollPosition) {
+        String title = mRes.getString(R.string.filter_dialog_title);
+        String message;
+        
+        switch (mCoinFilter) {
+            case FILTER_SHOW_ALL:
+                message = mRes.getString(R.string.filter_dialog_all);
+                break;
+            case FILTER_SHOW_COLLECTED:
+                message = mRes.getString(R.string.filter_dialog_collected);
+                break;
+            case FILTER_SHOW_MISSING:
+                message = mRes.getString(R.string.filter_dialog_missing);
+                break;
+            default:
+                message = mRes.getString(R.string.filter_dialog_all);
+                break;
+        }
+        
+        showAlert(newBuilder()
+                .setTitle(title)
+                .setMessage(message)
+                .setPositiveButton(R.string.okay, (dialog, which) -> dialog.dismiss())
+                .setNegativeButton(R.string.cancel, (dialog, which) -> {
+                    // Revert to previous filter state
+                    mCoinFilter = previousFilter;
+                    
+                    // Revert the SharedPreferences setting
+                    SharedPreferences filterPreferences = getSharedPreferences(MainApplication.PREFS, MODE_PRIVATE);
+                    SharedPreferences.Editor editor = filterPreferences.edit();
+                    editor.putInt(mCollectionName + COIN_FILTER, mCoinFilter);
+                    editor.apply();
+                    
+                    // Reapply the previous filter to the adapter
+                    if (mCoinSlotAdapter != null) {
+                        mCoinSlotAdapter.setFilter(mCoinFilter);
+                        // Update mCoinList reference for compatibility with existing code
+                        mCoinList = mCoinSlotAdapter.getFilteredCoinList();
+                    }
+                    
+                    // Restore the original scroll position
+                    restoreScrollPositionAfterFilterChange(savedScrollPosition, null, -1);
+                    
+                    // Update the menu to show the reverted filter state
+                    invalidateOptionsMenu();
+                    
+                    dialog.dismiss();
+                }));
     }
 }
