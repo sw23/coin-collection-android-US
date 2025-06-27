@@ -139,4 +139,58 @@ public class AsyncTaskManagerTests {
         // Cleanup
         manager.shutdown();
     }
+    
+    @Test
+    public void test_asyncTaskManagerConfigurationChangeScenario() {
+        AsyncTaskManager manager = new AsyncTaskManager();
+        final boolean[] taskCompleted = {false};
+        final String[] taskResult = {null};
+        
+        // Simulate a long-running task that would span a configuration change
+        AsyncTaskManager.BackgroundTask longTask = () -> {
+            try {
+                // Simulate some work
+                Thread.sleep(100);
+                return "Long task completed";
+            } catch (InterruptedException e) {
+                return "Task interrupted";
+            }
+        };
+        
+        AsyncTaskManager.PostExecuteTask postTask = result -> {
+            taskCompleted[0] = true;
+            taskResult[0] = result;
+        };
+        
+        // Start the task
+        manager.executeTask(1, longTask, null, postTask);
+        
+        // Verify task is running using the method (not LiveData since it's async)
+        assertTrue("Task should be running", manager.isTaskRunning());
+        
+        // Simulate configuration change - the task should continue running
+        // (In real scenario, the ViewModel survives and the task continues)
+        assertTrue("Task should still be running after configuration change", manager.isTaskRunning());
+        
+        // Wait for task completion
+        ShadowLooper.runUiThreadTasksIncludingDelayedTasks();
+        
+        // Let background thread finish
+        try {
+            Thread.sleep(200);
+        } catch (InterruptedException e) {
+            // Ignore
+        }
+        
+        // Process UI thread tasks again
+        ShadowLooper.runUiThreadTasksIncludingDelayedTasks();
+        
+        // Verify task completed successfully
+        assertTrue("Task should have completed", taskCompleted[0]);
+        assertEquals("Task result should be correct", "Long task completed", taskResult[0]);
+        assertFalse("Task should no longer be running", manager.isTaskRunning());
+        
+        // Cleanup
+        manager.shutdown();
+    }
 }

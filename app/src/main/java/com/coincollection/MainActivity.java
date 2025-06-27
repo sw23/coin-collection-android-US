@@ -155,13 +155,8 @@ public class MainActivity extends BaseActivity {
             // There's two possible async operations that could be running:
             //     - The one to open the database for the first time
             //     - The one to import collections
-            // In the case of the former, we just want to show the dialog that the user had on the
-            // screen. For the latter case, we still need something to call finishViewSetup, and
-            // we don't want to call it here bc it will try to use the database too early. Instead,
-            // set a flag that will have that async operation call finishViewSetup for us as well.
-            asyncProgressOnPreExecute();
-
-            // If we were in the middle of importing, the DB adapter may now be closed
+            // The ViewModel observers will automatically restore the progress dialog state.
+            // We just need to ensure the database adapter is available if we were importing.
             Integer taskId = mAsyncViewModel.getCurrentTaskId().getValue();
             if (taskId != null && taskId == TASK_IMPORT_COLLECTIONS) {
                 openDbAdapterForUIThread();

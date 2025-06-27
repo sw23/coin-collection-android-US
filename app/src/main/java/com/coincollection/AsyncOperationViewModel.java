@@ -47,7 +47,13 @@ public class AsyncOperationViewModel extends ViewModel {
         asyncTaskManager = new AsyncTaskManager();
         
         // Forward async manager state to our LiveData
-        asyncTaskManager.isRunning.observeForever(isTaskRunning::setValue);
+        asyncTaskManager.isRunning.observeForever(running -> {
+            isTaskRunning.setValue(running);
+            // Clear task ID when task completes
+            if (!running) {
+                currentTaskId.setValue(null);
+            }
+        });
         asyncTaskManager.result.observeForever(taskResult::setValue);
     }
     

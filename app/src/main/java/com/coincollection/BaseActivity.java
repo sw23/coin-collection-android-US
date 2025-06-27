@@ -108,9 +108,17 @@ public class BaseActivity extends AppCompatActivity implements AsyncProgressInte
             mAsyncViewModel.setSynchronousMode(true);
         }
         
-        // Observe async operation state
+        // Observe async operation state for automatic progress dialog management
         mAsyncViewModel.getIsTaskRunning().observe(this, isRunning -> {
-            // This will be used by subclasses to update UI state
+            if (isRunning != null) {
+                if (isRunning) {
+                    // Task is running - show progress dialog if not already showing
+                    showProgressDialogForCurrentTask();
+                } else {
+                    // Task completed - dismiss progress dialog
+                    dismissProgressDialog();
+                }
+            }
         });
         
         mAsyncViewModel.getTaskResult().observe(this, result -> {
@@ -210,11 +218,10 @@ public class BaseActivity extends AppCompatActivity implements AsyncProgressInte
     // TODO Also, read the notes on this better and make sure we are using it correctly
     @Override
     public Object onRetainCustomNonConfigurationInstance() {
-        // With lifecycle-aware ViewModels, we no longer need to manually retain async tasks
-        // The ViewModel automatically survives configuration changes
-        if (mProgressDialog != null && mProgressDialog.isShowing()) {
-            dismissProgressDialog();
-        }
+        // With lifecycle-aware ViewModels and proper progress dialog management,
+        // we no longer need to manually dismiss dialogs during configuration changes.
+        // The ViewModel survives rotation and the observers will automatically 
+        // restore the UI state when the activity is recreated.
         return null;
     }
 
@@ -231,6 +238,24 @@ public class BaseActivity extends AppCompatActivity implements AsyncProgressInte
         // due to its lifecycle-aware nature
         
         super.onDestroy();
+    }
+
+    /**
+     * Show progress dialog appropriate for the currently running task
+     */
+    private void showProgressDialogForCurrentTask() {
+        // Only show if we don't already have a progress dialog
+        if (mProgressDialog != null && mProgressDialog.isShowing()) {
+            return;
+        }
+        
+        Integer taskId = mAsyncViewModel.getCurrentTaskId().getValue();
+        if (taskId == null) {
+            return;
+        }
+        
+        // Call the subclass's preExecute method to show appropriate dialog
+        asyncProgressOnPreExecute();
     }
 
     /**
