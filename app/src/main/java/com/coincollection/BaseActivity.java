@@ -56,7 +56,11 @@ public class BaseActivity extends AppCompatActivity implements AsyncProgressInte
     protected boolean mUseAsyncTasks = true;
 
     // Async Task info - Updated for modern async handling
+    /** @deprecated Use mAsyncViewModel instead */
+    @Deprecated
     protected AsyncProgressTask mTask = null; // Deprecated - kept for compatibility
+    /** @deprecated Use mAsyncViewModel instead */
+    @Deprecated
     protected AsyncProgressTask mPreviousTask = null; // Deprecated - kept for compatibility
     protected AsyncOperationViewModel mAsyncViewModel; // New lifecycle-aware async handling
     public static final int TASK_OPEN_DATABASE = 0;

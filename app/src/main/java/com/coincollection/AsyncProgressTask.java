@@ -24,20 +24,32 @@ import android.os.AsyncTask;
 /**
  * sub-class of AsyncTask
  * See: http://stackoverflow.com/questions/6450275/android-how-to-work-with-asynctasks-progressdialog
+ * 
+ * @deprecated This class is deprecated as of API level 30. Use AsyncTaskManager with ExecutorService instead.
+ * This class is maintained for backward compatibility during the transition period.
  */
 // TODO For passing the AsyncTask between Activity instances, see this post:
 // http://www.androiddesignpatterns.com/2013/04/retaining-objects-across-config-changes.html
 // Our method is subject to the race conditions described therein :O
+@Deprecated
 class AsyncProgressTask extends AsyncTask<Void, Void, Void> {
     AsyncProgressInterface mListener;
     int mAsyncTaskId = 0;
     private final static int NUM_DELAY_HALF_SECONDS = 10;
     String mResultString;
 
+    /**
+     * @deprecated Constructor for deprecated AsyncProgressTask. Use AsyncOperationViewModel instead.
+     */
+    @Deprecated
     AsyncProgressTask(AsyncProgressInterface listener) {
         this.mListener = listener;
     }
 
+    /**
+     * @deprecated This method is deprecated. Background work is now handled by AsyncTaskManager.
+     */
+    @Deprecated
     @Override
     protected Void doInBackground(Void... params) {
         for (int i = 0; i < NUM_DELAY_HALF_SECONDS; i++) {
@@ -54,6 +66,10 @@ class AsyncProgressTask extends AsyncTask<Void, Void, Void> {
         return null;
     }
 
+    /**
+     * @deprecated This method is deprecated. Pre-execute work is now handled by AsyncTaskManager.
+     */
+    @Deprecated
     @Override
     protected void onPreExecute() {
         super.onPreExecute();
@@ -70,6 +86,10 @@ class AsyncProgressTask extends AsyncTask<Void, Void, Void> {
         }
     }
 
+    /**
+     * @deprecated This method is deprecated. Post-execute work is now handled by AsyncTaskManager.
+     */
+    @Deprecated
     @Override
     protected void onPostExecute(Void result) {
         super.onPostExecute(result);
