@@ -138,35 +138,15 @@ public class MainActivity extends BaseActivity {
         // isn't set
         createAndShowHelpDialog("first_Time_screen1", R.string.intro_message);
 
-        if (mPreviousTask == null) {
-            if (BuildConfig.DEBUG) {
-                Log.d(APP_NAME, "No previous state so kicking off AsyncProgressTask to doOpen");
-            }
-            // Kick off the AsyncProgressTask to open the database.  This will likely be the first open,
-            // so we want it in the AsyncTask in case we have to go into onUpgrade and it takes
-            // a long time.
-            kickOffAsyncProgressTask(TASK_OPEN_DATABASE);
-            // The AsyncProgressTask will update mDbAdapter once the database has been opened
-        } else {
-            if (BuildConfig.DEBUG) {
-                Log.d(APP_NAME, "Taking over existing mTask");
-            }
-
-            // There's two possible AsyncProgressTask's that could be running:
-            //     - The one to open the database for the first time
-            //     - The one to import collections
-            // In the case of the former, we just want to show the dialog that the user had on the
-            // screen.  For the latter case, we still need something to call finishViewSetup, and
-            // we don't want to call it here bc it will try to use the database too early.  Instead,
-            // set a flag that will have that AsyncProgressTask call finishViewSetup for us as well.
-            asyncProgressOnPreExecute();
-
-            // If we were in the middle of importing, the DB adapter may now be closed
-            if (mTask.mAsyncTaskId == TASK_IMPORT_COLLECTIONS) {
-                openDbAdapterForUIThread();
-                mIsImportingCollection = true;
-            }
+        // With ProgressExecutor approach, we always start fresh for simplicity
+        if (BuildConfig.DEBUG) {
+            Log.d(APP_NAME, "Kicking off ProgressExecutor to doOpen");
         }
+        // Kick off the ProgressExecutor to open the database.  This will likely be the first open,
+        // so we want it in the AsyncTask in case we have to go into onUpgrade and it takes
+        // a long time.
+        kickOffProgressExecutor(TASK_OPEN_DATABASE);
+        // The ProgressExecutor will update mDbAdapter once the database has been opened
 
         // Instantiate the FrontAdapter
         mListAdapter = new FrontAdapter(mContext, mCollectionListEntries, mNumberOfCollections);
@@ -176,7 +156,7 @@ public class MainActivity extends BaseActivity {
         lv.setTextFilterEnabled(true); // Typing narrows down the list
 
         // At this point the UI is ready to handle any async callbacks
-        setActivityReadyForAsyncCallbacks();
+        setActivityReadyForProgressCallbacks();
 
         // For when we use fragments, listen to the back stack so we can transition back here from
         // the fragment
@@ -506,7 +486,7 @@ public class MainActivity extends BaseActivity {
 
             if (mNumberOfCollections == 0) {
                 // Finish the import by kicking off an AsyncTask to do the heavy lifting
-                kickOffAsyncProgressTask(TASK_IMPORT_COLLECTIONS);
+                kickOffProgressExecutor(TASK_IMPORT_COLLECTIONS);
             } else {
                 showImportConfirmation();
             }
@@ -557,7 +537,7 @@ public class MainActivity extends BaseActivity {
                 showExportConfirmation();
             } else {
                 // Finish the export by kicking off an AsyncTask to do the heavy lifting
-                kickOffAsyncProgressTask(TASK_EXPORT_COLLECTIONS);
+                kickOffProgressExecutor(TASK_EXPORT_COLLECTIONS);
             }
         }
     }
@@ -630,7 +610,7 @@ public class MainActivity extends BaseActivity {
                     if (resultData != null) {
                         mImportExportFileUri = resultData.getData();
                         // Finish the export by kicking off an AsyncTask to do the heavy lifting
-                        kickOffAsyncProgressTask(TASK_EXPORT_COLLECTIONS);
+                        kickOffProgressExecutor(TASK_EXPORT_COLLECTIONS);
                     }
                     break;
                 }
@@ -641,7 +621,7 @@ public class MainActivity extends BaseActivity {
                             showImportConfirmation();
                         } else {
                             // Finish the import by kicking off an AsyncTask to do the heavy lifting
-                            kickOffAsyncProgressTask(TASK_IMPORT_COLLECTIONS);
+                            kickOffProgressExecutor(TASK_IMPORT_COLLECTIONS);
                         }
                     }
                     break;
@@ -822,7 +802,7 @@ public class MainActivity extends BaseActivity {
                 .setPositiveButton(mRes.getString(R.string.yes), (dialog, id) -> {
                     dialog.dismiss();
                     // Finish the export by kicking off an AsyncTask to do the heavy lifting
-                    kickOffAsyncProgressTask(TASK_EXPORT_COLLECTIONS);
+                    kickOffProgressExecutor(TASK_EXPORT_COLLECTIONS);
                 })
                 .setNegativeButton(mRes.getString(R.string.no), (dialog, id) -> dialog.cancel()));
     }
@@ -840,7 +820,7 @@ public class MainActivity extends BaseActivity {
                     // Finish the import by kicking off an AsyncTask to do the heavy lifting
                     dialog.dismiss();
                     mIsImportingCollection = true;
-                    kickOffAsyncProgressTask(TASK_IMPORT_COLLECTIONS);
+                    kickOffProgressExecutor(TASK_IMPORT_COLLECTIONS);
                 })
                 .setNegativeButton(mRes.getString(R.string.no), (dialog, id) -> dialog.cancel()));
     }

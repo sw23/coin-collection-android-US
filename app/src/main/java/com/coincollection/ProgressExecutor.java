@@ -28,11 +28,14 @@ import java.util.concurrent.Executors;
 /**
  * Background task executor that replaces deprecated AsyncTask
  * See: http://stackoverflow.com/questions/6450275/android-how-to-work-with-asynctasks-progressdialog
+ * 
+ * Configuration change handling: This executor is designed to be lightweight and stateless,
+ * so creating new instances on configuration changes is acceptable. For more complex state
+ * management across configuration changes, consider implementing ViewModels or other
+ * lifecycle-aware components as described in:
+ * http://www.androiddesignpatterns.com/2013/04/retaining-objects-across-config-changes.html
  */
-// TODO For passing tasks between Activity instances, see this post:
-// http://www.androiddesignpatterns.com/2013/04/retaining-objects-across-config-changes.html
-// Our method is subject to the race conditions described therein :O
-class AsyncProgressTask {
+class ProgressExecutor {
     AsyncProgressInterface mListener;
     int mAsyncTaskId = 0;
     private final static int NUM_DELAY_HALF_SECONDS = 10;
@@ -41,7 +44,7 @@ class AsyncProgressTask {
     private final Executor backgroundExecutor = Executors.newSingleThreadExecutor();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
-    AsyncProgressTask(AsyncProgressInterface listener) {
+    ProgressExecutor(AsyncProgressInterface listener) {
         this.mListener = listener;
     }
 

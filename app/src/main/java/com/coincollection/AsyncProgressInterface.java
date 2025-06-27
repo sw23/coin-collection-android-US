@@ -20,7 +20,7 @@
 package com.coincollection;
 
 /**
- * Interface used for AsyncProgressTask to communicate with activity
+ * Interface used for ProgressExecutor to communicate with activity
  */
 public interface AsyncProgressInterface {
     /**
