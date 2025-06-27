@@ -56,7 +56,6 @@ public class BaseActivity extends AppCompatActivity implements AsyncProgressInte
 
     // Async Task info
     protected AsyncProgressTask mTask = null;
-    protected AsyncProgressTask mPreviousTask = null;
     public static final int TASK_OPEN_DATABASE = 0;
     public static final int TASK_IMPORT_COLLECTIONS = 1;
     public static final int TASK_CREATE_UPDATE_COLLECTION = 2;
@@ -106,13 +105,9 @@ public class BaseActivity extends AppCompatActivity implements AsyncProgressInte
             openDbAdapterForUIThread();
         }
 
-        // Look for async tasks kicked-off prior to an orientation change
-        mPreviousTask = (AsyncProgressTask) getLastCustomNonConfigurationInstance();
-        if (mPreviousTask != null) {
-            mTask = mPreviousTask;
-        } else {
-            mTask = new AsyncProgressTask(this);
-        }
+        // TODO: Replace deprecated configuration change handling with modern lifecycle-aware approach
+        // For now, we create a new task instance on each configuration change
+        mTask = new AsyncProgressTask(this);
     }
 
     /**
@@ -193,20 +188,9 @@ public class BaseActivity extends AppCompatActivity implements AsyncProgressInte
         showAlert(newBuilder().setMessage(text).setCancelable(true));
     }
 
-    // https://raw.github.com/commonsguy/cw-android/master/Rotation/RotationAsync/src/com/commonsware/android/rotation/async/RotationAsync.java
-    // TODO Consider only using one of onSaveInstanceState and onRetainNonConfigurationInstanceState
-    // TODO Also, read the notes on this better and make sure we are using it correctly
-    @Override
-    public Object onRetainCustomNonConfigurationInstance() {
-
-        if (mProgressDialog != null && mProgressDialog.isShowing()) {
-            dismissProgressDialog();
-            return mTask;
-        } else {
-            // No dialog showing, do nothing
-            return null;
-        }
-    }
+    // TODO: Replace deprecated configuration change handling with modern lifecycle-aware approach
+    // The onRetainCustomNonConfigurationInstance method has been removed as it's deprecated
+    // Consider using ViewModels or other lifecycle-aware components for retaining state across config changes
 
     @Override
     public void onPause() {

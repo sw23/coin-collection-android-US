@@ -19,27 +19,49 @@
  */
 package com.coincollection;
 
-import android.os.AsyncTask;
+import android.os.Handler;
+import android.os.Looper;
+
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 
 /**
- * sub-class of AsyncTask
+ * Background task executor that replaces deprecated AsyncTask
  * See: http://stackoverflow.com/questions/6450275/android-how-to-work-with-asynctasks-progressdialog
  */
-// TODO For passing the AsyncTask between Activity instances, see this post:
+// TODO For passing tasks between Activity instances, see this post:
 // http://www.androiddesignpatterns.com/2013/04/retaining-objects-across-config-changes.html
 // Our method is subject to the race conditions described therein :O
-class AsyncProgressTask extends AsyncTask<Void, Void, Void> {
+class AsyncProgressTask {
     AsyncProgressInterface mListener;
     int mAsyncTaskId = 0;
     private final static int NUM_DELAY_HALF_SECONDS = 10;
     String mResultString;
+    
+    private final Executor backgroundExecutor = Executors.newSingleThreadExecutor();
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
     AsyncProgressTask(AsyncProgressInterface listener) {
         this.mListener = listener;
     }
 
-    @Override
-    protected Void doInBackground(Void... params) {
+    /**
+     * Execute the task (replaces AsyncTask.execute())
+     */
+    public void execute() {
+        // Execute pre-task on UI thread
+        executeOnPreExecute();
+        
+        // Execute background task
+        backgroundExecutor.execute(() -> {
+            executeDoInBackground();
+            
+            // Execute post-task on UI thread
+            mainHandler.post(this::executeOnPostExecute);
+        });
+    }
+
+    private void executeDoInBackground() {
         for (int i = 0; i < NUM_DELAY_HALF_SECONDS; i++) {
             if (mListener != null) {
                 mResultString = mListener.asyncProgressDoInBackground();
@@ -51,12 +73,9 @@ class AsyncProgressTask extends AsyncTask<Void, Void, Void> {
                 break;
             }
         }
-        return null;
     }
 
-    @Override
-    protected void onPreExecute() {
-        super.onPreExecute();
+    private void executeOnPreExecute() {
         for (int i = 0; i < NUM_DELAY_HALF_SECONDS; i++) {
             if (mListener != null) {
                 mListener.asyncProgressOnPreExecute();
@@ -70,9 +89,7 @@ class AsyncProgressTask extends AsyncTask<Void, Void, Void> {
         }
     }
 
-    @Override
-    protected void onPostExecute(Void result) {
-        super.onPostExecute(result);
+    private void executeOnPostExecute() {
         for (int i = 0; i < NUM_DELAY_HALF_SECONDS; i++) {
             if (mListener != null) {
                 mListener.asyncProgressOnPostExecute(mResultString);
