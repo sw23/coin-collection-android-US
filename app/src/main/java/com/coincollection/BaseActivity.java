@@ -55,14 +55,8 @@ public class BaseActivity extends AppCompatActivity implements AsyncProgressInte
     public static final String UNIT_TEST_USE_ASYNC_TASKS = "unit-test-use-async-tasks";
     protected boolean mUseAsyncTasks = true;
 
-    // Async Task info - Updated for modern async handling
-    /** @deprecated Use mAsyncViewModel instead */
-    @Deprecated
-    protected AsyncProgressTask mTask = null; // Deprecated - kept for compatibility
-    /** @deprecated Use mAsyncViewModel instead */
-    @Deprecated
-    protected AsyncProgressTask mPreviousTask = null; // Deprecated - kept for compatibility
-    protected AsyncOperationViewModel mAsyncViewModel; // New lifecycle-aware async handling
+    // Async Task info - Modern async handling
+    protected AsyncOperationViewModel mAsyncViewModel; // Lifecycle-aware async handling
     public static final int TASK_OPEN_DATABASE = 0;
     public static final int TASK_IMPORT_COLLECTIONS = 1;
     public static final int TASK_CREATE_UPDATE_COLLECTION = 2;
@@ -109,6 +103,11 @@ public class BaseActivity extends AppCompatActivity implements AsyncProgressInte
         // Initialize the new async operation ViewModel
         mAsyncViewModel = new ViewModelProvider(this).get(AsyncOperationViewModel.class);
         
+        // Set synchronous mode for unit tests
+        if (!mUseAsyncTasks) {
+            mAsyncViewModel.setSynchronousMode(true);
+        }
+        
         // Observe async operation state
         mAsyncViewModel.getIsTaskRunning().observe(this, isRunning -> {
             // This will be used by subclasses to update UI state
@@ -125,15 +124,6 @@ public class BaseActivity extends AppCompatActivity implements AsyncProgressInte
         // we do this on the async task since the upgrade may take a while
         if (mOpenDbAdapterInOnCreate) {
             openDbAdapterForUIThread();
-        }
-
-        // Look for async tasks kicked-off prior to an orientation change
-        // Note: This is deprecated but kept for backward compatibility during transition
-        mPreviousTask = (AsyncProgressTask) getLastCustomNonConfigurationInstance();
-        if (mPreviousTask != null) {
-            mTask = mPreviousTask;
-        } else {
-            mTask = new AsyncProgressTask(this);
         }
     }
 
@@ -203,9 +193,6 @@ public class BaseActivity extends AppCompatActivity implements AsyncProgressInte
      * is ready for an already running async task to call back
      */
     protected void setActivityReadyForAsyncCallbacks() {
-        if (mTask != null) {
-            mTask.mListener = this;
-        }
         // New async system is automatically lifecycle-aware, no manual setup needed
     }
 
@@ -223,14 +210,12 @@ public class BaseActivity extends AppCompatActivity implements AsyncProgressInte
     // TODO Also, read the notes on this better and make sure we are using it correctly
     @Override
     public Object onRetainCustomNonConfigurationInstance() {
-
+        // With lifecycle-aware ViewModels, we no longer need to manually retain async tasks
+        // The ViewModel automatically survives configuration changes
         if (mProgressDialog != null && mProgressDialog.isShowing()) {
             dismissProgressDialog();
-            return mTask;
-        } else {
-            // No dialog showing, do nothing
-            return null;
         }
+        return null;
     }
 
     @Override
@@ -242,13 +227,6 @@ public class BaseActivity extends AppCompatActivity implements AsyncProgressInte
 
     @Override
     public void onDestroy() {
-        // If an async task is running, set the listener to null to have it wait before
-        // trying its callback.  Setting the listener to null also prevents memory leaks
-        if (mTask != null) {
-            mTask.mListener = null;
-            mTask = null;
-        }
-        
         // The new ViewModel will automatically clean up when the activity is destroyed
         // due to its lifecycle-aware nature
         
@@ -383,7 +361,7 @@ public class BaseActivity extends AppCompatActivity implements AsyncProgressInte
 
     /**
      * Create and kick-off an async task to finish long-running tasks
-     * Updated to use modern async handling with backward compatibility
+     * Uses modern async handling with lifecycle management
      *
      * @param taskId type of task
      */
@@ -395,14 +373,6 @@ public class BaseActivity extends AppCompatActivity implements AsyncProgressInte
             this::asyncProgressOnPreExecute,   // Pre-execute work
             result -> asyncProgressOnPostExecute(result)   // Post-execute work
         );
-        
-        // Fallback to old system for unit tests or if explicitly requested
-        if (!mUseAsyncTasks && BuildConfig.DEBUG) {
-            // Call the tasks on the current thread (used for unit tests)
-            asyncProgressOnPreExecute();
-            String resultStr = asyncProgressDoInBackground();
-            asyncProgressOnPostExecute(resultStr);
-        }
     }
 
     /**

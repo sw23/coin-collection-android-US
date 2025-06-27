@@ -68,6 +68,13 @@ public class AsyncOperationViewModel extends ViewModel {
     }
     
     /**
+     * Set synchronous mode for unit testing
+     */
+    public void setSynchronousMode(boolean syncMode) {
+        asyncTaskManager.setSynchronousMode(syncMode);
+    }
+    
+    /**
      * Cancel the current operation
      */
     public void cancelCurrentOperation() {

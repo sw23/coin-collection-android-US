@@ -37,6 +37,7 @@ public class AsyncTaskManager {
     private final ExecutorService executorService;
     private final Handler mainHandler;
     private Future<?> currentTask;
+    private boolean syncMode = false; // For unit testing
     
     // LiveData for progress tracking
     public final MutableLiveData<Boolean> isRunning = new MutableLiveData<>(false);
@@ -45,6 +46,14 @@ public class AsyncTaskManager {
     public AsyncTaskManager() {
         executorService = Executors.newSingleThreadExecutor();
         mainHandler = new Handler(Looper.getMainLooper());
+    }
+    
+    /**
+     * Enable synchronous mode for unit testing
+     * When enabled, tasks execute immediately on the current thread
+     */
+    public void setSynchronousMode(boolean syncMode) {
+        this.syncMode = syncMode;
     }
     
     /**
@@ -59,6 +68,12 @@ public class AsyncTaskManager {
                            BackgroundTask backgroundTask,
                            Runnable preExecuteTask,
                            PostExecuteTask postExecuteTask) {
+        
+        // If in synchronous mode (for unit tests), execute immediately on current thread
+        if (syncMode) {
+            executeSynchronously(backgroundTask, preExecuteTask, postExecuteTask);
+            return;
+        }
         
         // Cancel any running task
         if (currentTask != null && !currentTask.isDone()) {
@@ -96,6 +111,42 @@ public class AsyncTaskManager {
                 }
             });
         });
+    }
+    
+    /**
+     * Execute task synchronously for unit testing
+     */
+    private void executeSynchronously(BackgroundTask backgroundTask, 
+                                    Runnable preExecuteTask, 
+                                    PostExecuteTask postExecuteTask) {
+        // Set running state
+        isRunning.setValue(true);
+        
+        // Run pre-execute
+        if (preExecuteTask != null) {
+            preExecuteTask.run();
+        }
+        
+        // Run background task on current thread
+        String taskResult = "";
+        try {
+            if (backgroundTask != null) {
+                taskResult = backgroundTask.doInBackground();
+            }
+        } catch (Exception e) {
+            taskResult = "Error: " + e.getMessage();
+        }
+        
+        // Set result
+        result.setValue(taskResult);
+        
+        // Run post-execute
+        if (postExecuteTask != null) {
+            postExecuteTask.onPostExecute(taskResult);
+        }
+        
+        // Clear running state
+        isRunning.setValue(false);
     }
     
     /**
