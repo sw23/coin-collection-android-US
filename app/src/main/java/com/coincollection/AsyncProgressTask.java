@@ -61,6 +61,16 @@ class AsyncProgressTask {
         });
     }
 
+    /**
+     * Cancel the task and clean up resources
+     */
+    public void cancel() {
+        mListener = null;
+        // Note: We don't shut down the executor here to avoid potential issues
+        // with ongoing tasks. The executor will be garbage collected when this 
+        // instance is no longer referenced.
+    }
+
     private void executeDoInBackground() {
         for (int i = 0; i < NUM_DELAY_HALF_SECONDS; i++) {
             if (mListener != null) {

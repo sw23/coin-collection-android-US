@@ -201,10 +201,9 @@ public class BaseActivity extends AppCompatActivity implements AsyncProgressInte
 
     @Override
     public void onDestroy() {
-        // If an async task is running, set the listener to null to have it wait before
-        // trying its callback.  Setting the listener to null also prevents memory leaks
+        // If an async task is running, cancel it to prevent memory leaks
         if (mTask != null) {
-            mTask.mListener = null;
+            mTask.cancel();
             mTask = null;
         }
         super.onDestroy();
