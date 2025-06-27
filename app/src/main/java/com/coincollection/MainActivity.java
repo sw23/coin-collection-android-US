@@ -162,7 +162,11 @@ public class MainActivity extends BaseActivity {
             asyncProgressOnPreExecute();
 
             // If we were in the middle of importing, the DB adapter may now be closed
-            if (mTask.mAsyncTaskId == TASK_IMPORT_COLLECTIONS) {
+            Integer taskId = null;
+            if (mTask != null) {
+                taskId = mTask.mAsyncTaskId;
+            }
+            if (taskId != null && taskId == TASK_IMPORT_COLLECTIONS) {
                 openDbAdapterForUIThread();
                 mIsImportingCollection = true;
             }
@@ -349,7 +353,19 @@ public class MainActivity extends BaseActivity {
 
     @Override
     public String asyncProgressDoInBackground() {
-        switch (mTask.mAsyncTaskId) {
+        // Get current task ID from ViewModel if available, otherwise fallback to old method
+        Integer currentTaskId = null;
+        if (mAsyncViewModel != null && mAsyncViewModel.getCurrentTaskId().getValue() != null) {
+            currentTaskId = mAsyncViewModel.getCurrentTaskId().getValue();
+        } else if (mTask != null) {
+            currentTaskId = mTask.mAsyncTaskId;
+        }
+        
+        if (currentTaskId == null) {
+            return "";
+        }
+        
+        switch (currentTaskId) {
             case TASK_OPEN_DATABASE: {
                 return openDbAdapterForAsyncThread();
             }
@@ -393,7 +409,19 @@ public class MainActivity extends BaseActivity {
 
     @Override
     public void asyncProgressOnPreExecute() {
-        switch (mTask.mAsyncTaskId) {
+        // Get current task ID from ViewModel if available, otherwise fallback to old method
+        Integer currentTaskId = null;
+        if (mAsyncViewModel != null && mAsyncViewModel.getCurrentTaskId().getValue() != null) {
+            currentTaskId = mAsyncViewModel.getCurrentTaskId().getValue();
+        } else if (mTask != null) {
+            currentTaskId = mTask.mAsyncTaskId;
+        }
+        
+        if (currentTaskId == null) {
+            return;
+        }
+        
+        switch (currentTaskId) {
             case TASK_OPEN_DATABASE: {
                 createProgressDialog(mRes.getString(R.string.opening_database));
                 break;
@@ -413,7 +441,16 @@ public class MainActivity extends BaseActivity {
     public void asyncProgressOnPostExecute(String resultStr) {
         super.asyncProgressOnPostExecute(resultStr);
         dismissProgressDialog();
-        if (mTask.mAsyncTaskId == TASK_IMPORT_COLLECTIONS) {
+        
+        // Get current task ID from ViewModel if available, otherwise fallback to old method
+        Integer currentTaskId = null;
+        if (mAsyncViewModel != null && mAsyncViewModel.getCurrentTaskId().getValue() != null) {
+            currentTaskId = mAsyncViewModel.getCurrentTaskId().getValue();
+        } else if (mTask != null) {
+            currentTaskId = mTask.mAsyncTaskId;
+        }
+        
+        if (currentTaskId != null && currentTaskId == TASK_IMPORT_COLLECTIONS) {
             mIsImportingCollection = false;
         }
         updateCollectionListFromDatabaseAndUpdateViewForUIThread();

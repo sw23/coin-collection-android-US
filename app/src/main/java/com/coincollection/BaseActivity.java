@@ -39,6 +39,7 @@ import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
+import androidx.lifecycle.ViewModelProvider;
 
 import com.coincollection.helper.NonLeakingAlertDialogBuilder;
 import com.spencerpages.BuildConfig;
@@ -54,9 +55,10 @@ public class BaseActivity extends AppCompatActivity implements AsyncProgressInte
     public static final String UNIT_TEST_USE_ASYNC_TASKS = "unit-test-use-async-tasks";
     protected boolean mUseAsyncTasks = true;
 
-    // Async Task info
-    protected AsyncProgressTask mTask = null;
-    protected AsyncProgressTask mPreviousTask = null;
+    // Async Task info - Updated for modern async handling
+    protected AsyncProgressTask mTask = null; // Deprecated - kept for compatibility
+    protected AsyncProgressTask mPreviousTask = null; // Deprecated - kept for compatibility
+    protected AsyncOperationViewModel mAsyncViewModel; // New lifecycle-aware async handling
     public static final int TASK_OPEN_DATABASE = 0;
     public static final int TASK_IMPORT_COLLECTIONS = 1;
     public static final int TASK_CREATE_UPDATE_COLLECTION = 2;
@@ -100,6 +102,21 @@ public class BaseActivity extends AppCompatActivity implements AsyncProgressInte
         mUseAsyncTasks = mCallingIntent.getBooleanExtra(UNIT_TEST_USE_ASYNC_TASKS, true);
         mActionBar = getSupportActionBar();
 
+        // Initialize the new async operation ViewModel
+        mAsyncViewModel = new ViewModelProvider(this).get(AsyncOperationViewModel.class);
+        
+        // Observe async operation state
+        mAsyncViewModel.getIsTaskRunning().observe(this, isRunning -> {
+            // This will be used by subclasses to update UI state
+        });
+        
+        mAsyncViewModel.getTaskResult().observe(this, result -> {
+            if (result != null && !result.isEmpty()) {
+                // Handle the result - subclasses can override this behavior
+                asyncProgressOnPostExecute(result);
+            }
+        });
+
         // In most cases we want to open the database adapter right away, but in MainActivity
         // we do this on the async task since the upgrade may take a while
         if (mOpenDbAdapterInOnCreate) {
@@ -107,6 +124,7 @@ public class BaseActivity extends AppCompatActivity implements AsyncProgressInte
         }
 
         // Look for async tasks kicked-off prior to an orientation change
+        // Note: This is deprecated but kept for backward compatibility during transition
         mPreviousTask = (AsyncProgressTask) getLastCustomNonConfigurationInstance();
         if (mPreviousTask != null) {
             mTask = mPreviousTask;
@@ -181,7 +199,10 @@ public class BaseActivity extends AppCompatActivity implements AsyncProgressInte
      * is ready for an already running async task to call back
      */
     protected void setActivityReadyForAsyncCallbacks() {
-        mTask.mListener = this;
+        if (mTask != null) {
+            mTask.mListener = this;
+        }
+        // New async system is automatically lifecycle-aware, no manual setup needed
     }
 
     /**
@@ -223,6 +244,10 @@ public class BaseActivity extends AppCompatActivity implements AsyncProgressInte
             mTask.mListener = null;
             mTask = null;
         }
+        
+        // The new ViewModel will automatically clean up when the activity is destroyed
+        // due to its lifecycle-aware nature
+        
         super.onDestroy();
     }
 
@@ -354,15 +379,21 @@ public class BaseActivity extends AppCompatActivity implements AsyncProgressInte
 
     /**
      * Create and kick-off an async task to finish long-running tasks
+     * Updated to use modern async handling with backward compatibility
      *
      * @param taskId type of task
      */
     public void kickOffAsyncProgressTask(int taskId) {
-        mTask = new AsyncProgressTask(this);
-        mTask.mAsyncTaskId = taskId;
-        if (this.mUseAsyncTasks || !BuildConfig.DEBUG) {
-            mTask.execute();
-        } else {
+        // Use new async system for better lifecycle management
+        mAsyncViewModel.executeAsyncOperation(
+            taskId,
+            this::asyncProgressDoInBackground, // Background work
+            this::asyncProgressOnPreExecute,   // Pre-execute work
+            result -> asyncProgressOnPostExecute(result)   // Post-execute work
+        );
+        
+        // Fallback to old system for unit tests or if explicitly requested
+        if (!mUseAsyncTasks && BuildConfig.DEBUG) {
             // Call the tasks on the current thread (used for unit tests)
             asyncProgressOnPreExecute();
             String resultStr = asyncProgressDoInBackground();
