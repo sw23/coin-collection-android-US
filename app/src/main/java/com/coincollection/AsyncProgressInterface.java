@@ -20,7 +20,8 @@
 package com.coincollection;
 
 /**
- * Interface used for AsyncProgressTask to communicate with activity
+ * Interface used for async operations to communicate with activity
+ * Updated to work with modern async handling while maintaining backward compatibility
  */
 public interface AsyncProgressInterface {
     /**
@@ -36,8 +37,8 @@ public interface AsyncProgressInterface {
     void asyncProgressOnPreExecute();
 
     /**
-     * Method to perform on the UI thread after of the async task
-     * This method should check the
+     * Method to perform on the UI thread after the async task
+     * This method should check the result string for errors
      *
      * @param resultStr a string result to display, or "" if no result
      */

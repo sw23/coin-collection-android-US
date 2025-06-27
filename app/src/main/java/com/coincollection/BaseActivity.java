@@ -39,6 +39,7 @@ import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
+import androidx.lifecycle.ViewModelProvider;
 
 import com.coincollection.helper.NonLeakingAlertDialogBuilder;
 import com.spencerpages.BuildConfig;
@@ -54,9 +55,8 @@ public class BaseActivity extends AppCompatActivity implements AsyncProgressInte
     public static final String UNIT_TEST_USE_ASYNC_TASKS = "unit-test-use-async-tasks";
     protected boolean mUseAsyncTasks = true;
 
-    // Async Task info
-    protected AsyncProgressTask mTask = null;
-    protected AsyncProgressTask mPreviousTask = null;
+    // Async Task info - Modern async handling
+    protected AsyncOperationViewModel mAsyncViewModel; // Lifecycle-aware async handling
     public static final int TASK_OPEN_DATABASE = 0;
     public static final int TASK_IMPORT_COLLECTIONS = 1;
     public static final int TASK_CREATE_UPDATE_COLLECTION = 2;
@@ -100,18 +100,38 @@ public class BaseActivity extends AppCompatActivity implements AsyncProgressInte
         mUseAsyncTasks = mCallingIntent.getBooleanExtra(UNIT_TEST_USE_ASYNC_TASKS, true);
         mActionBar = getSupportActionBar();
 
+        // Initialize the new async operation ViewModel
+        mAsyncViewModel = new ViewModelProvider(this).get(AsyncOperationViewModel.class);
+        
+        // Set synchronous mode for unit tests
+        if (!mUseAsyncTasks) {
+            mAsyncViewModel.setSynchronousMode(true);
+        }
+        
+        // Observe async operation state for automatic progress dialog management
+        mAsyncViewModel.getIsTaskRunning().observe(this, isRunning -> {
+            if (isRunning != null) {
+                if (isRunning) {
+                    // Task is running - show progress dialog if not already showing
+                    showProgressDialogForCurrentTask();
+                } else {
+                    // Task completed - dismiss progress dialog
+                    dismissProgressDialog();
+                }
+            }
+        });
+        
+        mAsyncViewModel.getTaskResult().observe(this, result -> {
+            if (result != null && !result.isEmpty()) {
+                // Handle the result - subclasses can override this behavior
+                asyncProgressOnPostExecute(result);
+            }
+        });
+
         // In most cases we want to open the database adapter right away, but in MainActivity
         // we do this on the async task since the upgrade may take a while
         if (mOpenDbAdapterInOnCreate) {
             openDbAdapterForUIThread();
-        }
-
-        // Look for async tasks kicked-off prior to an orientation change
-        mPreviousTask = (AsyncProgressTask) getLastCustomNonConfigurationInstance();
-        if (mPreviousTask != null) {
-            mTask = mPreviousTask;
-        } else {
-            mTask = new AsyncProgressTask(this);
         }
     }
 
@@ -181,7 +201,7 @@ public class BaseActivity extends AppCompatActivity implements AsyncProgressInte
      * is ready for an already running async task to call back
      */
     protected void setActivityReadyForAsyncCallbacks() {
-        mTask.mListener = this;
+        // New async system is automatically lifecycle-aware, no manual setup needed
     }
 
     /**
@@ -198,14 +218,11 @@ public class BaseActivity extends AppCompatActivity implements AsyncProgressInte
     // TODO Also, read the notes on this better and make sure we are using it correctly
     @Override
     public Object onRetainCustomNonConfigurationInstance() {
-
-        if (mProgressDialog != null && mProgressDialog.isShowing()) {
-            dismissProgressDialog();
-            return mTask;
-        } else {
-            // No dialog showing, do nothing
-            return null;
-        }
+        // With lifecycle-aware ViewModels and proper progress dialog management,
+        // we no longer need to manually dismiss dialogs during configuration changes.
+        // The ViewModel survives rotation and the observers will automatically 
+        // restore the UI state when the activity is recreated.
+        return null;
     }
 
     @Override
@@ -217,13 +234,28 @@ public class BaseActivity extends AppCompatActivity implements AsyncProgressInte
 
     @Override
     public void onDestroy() {
-        // If an async task is running, set the listener to null to have it wait before
-        // trying its callback.  Setting the listener to null also prevents memory leaks
-        if (mTask != null) {
-            mTask.mListener = null;
-            mTask = null;
-        }
+        // The new ViewModel will automatically clean up when the activity is destroyed
+        // due to its lifecycle-aware nature
+        
         super.onDestroy();
+    }
+
+    /**
+     * Show progress dialog appropriate for the currently running task
+     */
+    private void showProgressDialogForCurrentTask() {
+        // Only show if we don't already have a progress dialog
+        if (mProgressDialog != null && mProgressDialog.isShowing()) {
+            return;
+        }
+        
+        Integer taskId = mAsyncViewModel.getCurrentTaskId().getValue();
+        if (taskId == null) {
+            return;
+        }
+        
+        // Call the subclass's preExecute method to show appropriate dialog
+        asyncProgressOnPreExecute();
     }
 
     /**
@@ -354,20 +386,18 @@ public class BaseActivity extends AppCompatActivity implements AsyncProgressInte
 
     /**
      * Create and kick-off an async task to finish long-running tasks
+     * Uses modern async handling with lifecycle management
      *
      * @param taskId type of task
      */
     public void kickOffAsyncProgressTask(int taskId) {
-        mTask = new AsyncProgressTask(this);
-        mTask.mAsyncTaskId = taskId;
-        if (this.mUseAsyncTasks || !BuildConfig.DEBUG) {
-            mTask.execute();
-        } else {
-            // Call the tasks on the current thread (used for unit tests)
-            asyncProgressOnPreExecute();
-            String resultStr = asyncProgressDoInBackground();
-            asyncProgressOnPostExecute(resultStr);
-        }
+        // Use new async system for better lifecycle management
+        mAsyncViewModel.executeAsyncOperation(
+            taskId,
+            this::asyncProgressDoInBackground, // Background work
+            this::asyncProgressOnPreExecute,   // Pre-execute work
+            result -> asyncProgressOnPostExecute(result)   // Post-execute work
+        );
     }
 
     /**

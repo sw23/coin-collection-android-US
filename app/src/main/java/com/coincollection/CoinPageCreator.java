@@ -301,8 +301,8 @@ public class CoinPageCreator extends BaseActivity {
             setInternalStateFromCollectionIndex(0, -1, null);
         }
 
-        // Restore the progress dialog if the previous task was running
-        if (mPreviousTask != null) {
+        // Restore the progress dialog if there's a running async task
+        if (mAsyncViewModel.isCurrentlyRunning()) {
             asyncProgressOnPreExecute();
         }
 
