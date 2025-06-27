@@ -335,8 +335,9 @@ public class MainActivity extends BaseActivity {
 
     @Override
     public void onDestroy() {
-        // Only MainActivity closes the DB adapter, as it's shared between all activities
-        if (mDbAdapter != null) {
+        // Only close the DB adapter if the activity is being destroyed permanently,
+        // not during configuration changes (like rotation)
+        if (mDbAdapter != null && !isChangingConfigurations()) {
             mDbAdapter.close();
         }
         // Don't try and stop any tasks, as they could be in the middle of a DB upgrade
