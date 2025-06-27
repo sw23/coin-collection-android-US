@@ -54,9 +54,8 @@ public class BaseActivity extends AppCompatActivity implements AsyncProgressInte
     public static final String UNIT_TEST_USE_ASYNC_TASKS = "unit-test-use-async-tasks";
     protected boolean mUseAsyncTasks = true;
 
-    // Async Task info
-    protected AsyncProgressTask mTask = null;
-    protected AsyncProgressTask mPreviousTask = null;
+    // Progress executor info
+    protected ProgressExecutor mTask = null;
     public static final int TASK_OPEN_DATABASE = 0;
     public static final int TASK_IMPORT_COLLECTIONS = 1;
     public static final int TASK_CREATE_UPDATE_COLLECTION = 2;
@@ -106,13 +105,9 @@ public class BaseActivity extends AppCompatActivity implements AsyncProgressInte
             openDbAdapterForUIThread();
         }
 
-        // Look for async tasks kicked-off prior to an orientation change
-        mPreviousTask = (AsyncProgressTask) getLastCustomNonConfigurationInstance();
-        if (mPreviousTask != null) {
-            mTask = mPreviousTask;
-        } else {
-            mTask = new AsyncProgressTask(this);
-        }
+        // For configuration changes, we create a new executor instance
+        // This is a simplified approach until we implement proper lifecycle-aware state management
+        mTask = new ProgressExecutor(this);
     }
 
     /**
@@ -177,10 +172,10 @@ public class BaseActivity extends AppCompatActivity implements AsyncProgressInte
     }
 
     /**
-     * Activities that make use of the async task should call this once their UI state
-     * is ready for an already running async task to call back
+     * Activities that make use of the progress executor should call this once their UI state
+     * is ready for an already running executor to call back
      */
-    protected void setActivityReadyForAsyncCallbacks() {
+    protected void setActivityReadyForProgressCallbacks() {
         mTask.mListener = this;
     }
 
@@ -193,20 +188,8 @@ public class BaseActivity extends AppCompatActivity implements AsyncProgressInte
         showAlert(newBuilder().setMessage(text).setCancelable(true));
     }
 
-    // https://raw.github.com/commonsguy/cw-android/master/Rotation/RotationAsync/src/com/commonsware/android/rotation/async/RotationAsync.java
-    // TODO Consider only using one of onSaveInstanceState and onRetainNonConfigurationInstanceState
-    // TODO Also, read the notes on this better and make sure we are using it correctly
-    @Override
-    public Object onRetainCustomNonConfigurationInstance() {
-
-        if (mProgressDialog != null && mProgressDialog.isShowing()) {
-            dismissProgressDialog();
-            return mTask;
-        } else {
-            // No dialog showing, do nothing
-            return null;
-        }
-    }
+    // Configuration change handling has been simplified for ProgressExecutor approach
+    // The executor is now stateless and lightweight, so creating new instances is acceptable
 
     @Override
     public void onPause() {
@@ -217,10 +200,9 @@ public class BaseActivity extends AppCompatActivity implements AsyncProgressInte
 
     @Override
     public void onDestroy() {
-        // If an async task is running, set the listener to null to have it wait before
-        // trying its callback.  Setting the listener to null also prevents memory leaks
+        // If a progress executor is running, cancel it to prevent memory leaks
         if (mTask != null) {
-            mTask.mListener = null;
+            mTask.cancel();
             mTask = null;
         }
         super.onDestroy();
@@ -353,12 +335,12 @@ public class BaseActivity extends AppCompatActivity implements AsyncProgressInte
     }
 
     /**
-     * Create and kick-off an async task to finish long-running tasks
+     * Create and kick-off a progress executor to finish long-running tasks
      *
      * @param taskId type of task
      */
-    public void kickOffAsyncProgressTask(int taskId) {
-        mTask = new AsyncProgressTask(this);
+    public void kickOffProgressExecutor(int taskId) {
+        mTask = new ProgressExecutor(this);
         mTask.mAsyncTaskId = taskId;
         if (this.mUseAsyncTasks || !BuildConfig.DEBUG) {
             mTask.execute();

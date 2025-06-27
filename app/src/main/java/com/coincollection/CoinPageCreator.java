@@ -301,13 +301,8 @@ public class CoinPageCreator extends BaseActivity {
             setInternalStateFromCollectionIndex(0, -1, null);
         }
 
-        // Restore the progress dialog if the previous task was running
-        if (mPreviousTask != null) {
-            asyncProgressOnPreExecute();
-        }
-
         // At this point the UI is ready to handle any async callbacks
-        setActivityReadyForAsyncCallbacks();
+        setActivityReadyForProgressCallbacks();
 
         // Next, we will finish setting up the various UI elements (creating
         // adapters, listeners, etc..  We won't set any of the values yet -
@@ -661,7 +656,7 @@ public class CoinPageCreator extends BaseActivity {
         }
 
         // Passed all checks - start the creation/update and wait for callbacks to be called
-        kickOffAsyncProgressTask(TASK_CREATE_UPDATE_COLLECTION);
+        kickOffProgressExecutor(TASK_CREATE_UPDATE_COLLECTION);
     }
 
     @Override
