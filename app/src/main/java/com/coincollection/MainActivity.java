@@ -50,6 +50,8 @@ import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
@@ -88,11 +90,16 @@ public class MainActivity extends BaseActivity {
     private boolean mExportSingleFileCsv = false;
     private Uri mImportExportFileUri = null;
 
+    // File selection handler for testable file operations
+    private final FileSelectionHandler mFileSelectionHandler = new FileSelectionHandler();
+
+    // Activity Result Launchers for file selection
+    private ActivityResultLauncher<Intent> mImportFileLauncher;
+    private ActivityResultLauncher<Intent> mExportFileLauncher;
+
     // App permission requests
     private final static int IMPORT_PERMISSIONS_REQUEST = 0;
     private final static int EXPORT_PERMISSIONS_REQUEST = 1;
-    private final static int PICK_IMPORT_FILE = 2;
-    private final static int PICK_EXPORT_FILE = 3;
 
     // Default list item view positions
     //  0. Add Collection
@@ -129,6 +136,9 @@ public class MainActivity extends BaseActivity {
         setContentView(R.layout.main_activity_layout);
         View rootView = findViewById(R.id.main_activity_frame);
         applyWindowInsets(rootView);
+
+        // Initialize Activity Result Launchers for file selection
+        initializeActivityResultLaunchers();
 
         // In legacy code we used first_Time_screen2 here so that the message would be displayed
         // until they made it to the create collection screen.  That isn't necessary anymore, but
@@ -268,6 +278,69 @@ public class MainActivity extends BaseActivity {
         });
     }
 
+    /**
+     * Initialize Activity Result Launchers for file selection operations
+     */
+    private void initializeActivityResultLaunchers() {
+        // Launcher for import file selection
+        mImportFileLauncher = registerForActivityResult(
+            new ActivityResultContracts.StartActivityForResult(),
+            result -> {
+                if (result.getResultCode() == Activity.RESULT_OK) {
+                    mFileSelectionHandler.handleFileSelectionResult(result.getData(), new FileSelectionHandler.FileSelectionCallback() {
+                        @Override
+                        public void onFileSelected(Uri fileUri) {
+                            mImportExportFileUri = fileUri;
+                            if (mNumberOfCollections != 0) {
+                                showImportConfirmation();
+                            } else {
+                                // Finish the import by kicking off an AsyncTask to do the heavy lifting
+                                kickOffAsyncTaskRunner(TASK_IMPORT_COLLECTIONS);
+                            }
+                        }
+
+                        @Override
+                        public void onSelectionCancelled() {
+                            // User cancelled file selection, no action needed
+                        }
+
+                        @Override
+                        public void onError(String errorMessage) {
+                            showCancelableAlert(errorMessage);
+                        }
+                    });
+                }
+            }
+        );
+
+        // Launcher for export file selection
+        mExportFileLauncher = registerForActivityResult(
+            new ActivityResultContracts.StartActivityForResult(),
+            result -> {
+                if (result.getResultCode() == Activity.RESULT_OK) {
+                    mFileSelectionHandler.handleFileSelectionResult(result.getData(), new FileSelectionHandler.FileSelectionCallback() {
+                        @Override
+                        public void onFileSelected(Uri fileUri) {
+                            mImportExportFileUri = fileUri;
+                            // Finish the export using AsyncTaskRunner to do the heavy lifting
+                            kickOffAsyncTaskRunner(TASK_EXPORT_COLLECTIONS);
+                        }
+
+                        @Override
+                        public void onSelectionCancelled() {
+                            // User cancelled file selection, no action needed
+                        }
+
+                        @Override
+                        public void onError(String errorMessage) {
+                            showCancelableAlert(errorMessage);
+                        }
+                    });
+                }
+            }
+        );
+    }
+
     @Override
     public void onResume() {
         super.onResume();
@@ -392,19 +465,9 @@ public class MainActivity extends BaseActivity {
      */
     private void launchImportTask() {
         if (!mImportExportLegacyCsv) {
-            Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-            intent.addCategory(Intent.CATEGORY_OPENABLE);
-            intent.setType("*/*");
-            String[] mimeTypes = {"text/comma-separated-values", "text/csv", "application/json"};
-            intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                // The files should preferably be placed in the downloads folder
-                Uri pickerInitialUri = Uri.parse(Environment.DIRECTORY_DOWNLOADS);
-                intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, pickerInitialUri);
-            }
-
             try {
-                startActivityForResult(intent, PICK_IMPORT_FILE);
+                Intent intent = mFileSelectionHandler.createImportFileIntent();
+                mImportFileLauncher.launch(intent);
             } catch (ActivityNotFoundException e) {
                 // Handle if there isn't an activity to handle the intent
                 Toast.makeText(this, mRes.getString(R.string.error_no_file_manager), Toast.LENGTH_LONG).show();
@@ -437,21 +500,8 @@ public class MainActivity extends BaseActivity {
         }
 
         if (!mImportExportLegacyCsv) {
-            Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
-            intent.addCategory(Intent.CATEGORY_OPENABLE);
-            if (mExportSingleFileCsv) {
-                intent.setType("text/csv");
-                intent.putExtra(Intent.EXTRA_TITLE, "coin-collection-" + getTodayDateString() + ".csv");
-            } else {
-                intent.setType("application/json");
-                intent.putExtra(Intent.EXTRA_TITLE, "coin-collection-" + getTodayDateString() + ".json");
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                // The files should preferably be placed in the downloads folder
-                Uri pickerInitialUri = Uri.parse(Environment.DIRECTORY_DOWNLOADS);
-                intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, pickerInitialUri);
-            }
-            startActivityForResult(intent, PICK_EXPORT_FILE);
+            Intent intent = mFileSelectionHandler.createExportFileIntent(mExportSingleFileCsv, getTodayDateString());
+            mExportFileLauncher.launch(intent);
         } else {
             // Check for WRITE_EXTERNAL_STORAGE permissions (must request starting in API Level 23)
             // hasPermissions() will kick off the permissions request and the handler will re-call
@@ -527,36 +577,6 @@ public class MainActivity extends BaseActivity {
                 }
                 case EXPORT_PERMISSIONS_REQUEST: {
                     showCancelableAlert(mRes.getString(R.string.export_canceled));
-                    break;
-                }
-            }
-        }
-    }
-
-    @Override
-    public void onActivityResult(int requestCode, int resultCode,
-                                 Intent resultData) {
-        super.onActivityResult(requestCode, resultCode, resultData);
-        if (resultCode == Activity.RESULT_OK) {
-            switch (requestCode) {
-                case PICK_EXPORT_FILE: {
-                    if (resultData != null) {
-                        mImportExportFileUri = resultData.getData();
-                        // Finish the export using AsyncTaskRunner to do the heavy lifting
-                        kickOffAsyncTaskRunner(TASK_EXPORT_COLLECTIONS);
-                    }
-                    break;
-                }
-                case PICK_IMPORT_FILE: {
-                    if (resultData != null) {
-                        mImportExportFileUri = resultData.getData();
-                        if (mNumberOfCollections != 0) {
-                            showImportConfirmation();
-                        } else {
-                            // Finish the import by kicking off an AsyncTask to do the heavy lifting
-                            kickOffAsyncTaskRunner(TASK_IMPORT_COLLECTIONS);
-                        }
-                    }
                     break;
                 }
             }
